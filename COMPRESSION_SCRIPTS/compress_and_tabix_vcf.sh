@@ -25,78 +25,86 @@
 # INPUT VARIABLES
 
 	DIR_TO_PARSE=$1
-		PROJECT_NAME=$(basename $DIR_TO_PARSE)
-	TABIX_EXEC=$2
-	BGZIP_EXEC=$3
+		PROJECT_NAME=$(basename ${DIR_TO_PARSE})
+	DATA_ARCHIVING_CONTAINER=$2
+	THREADS=$3
 	TIME_STAMP=$4
 
-START_COMPRESS_VCF=$(date '+%s')
+# capture time process starts for wall clock tracking purposes.
 
-	# FIND VCF FILES TO COMPRESS
+	START_COMPRESS_VCF=$(date '+%s')
 
-		find ${DIR_TO_PARSE} -type f \
-			\( -name \*.vcf \
-			-o -name \*.gvcf \
-			-o -name \*.recal \) \
-		>| ${DIR_TO_PARSE}/vcf_to_compress_${TIME_STAMP}.list
+# FIND VCF FILES TO COMPRESS
 
-	# compress vcf with bgzip and create tbi index
-	# compare md5sum before and after compression. if the same, then delete the uncompressed file.
+	find ${DIR_TO_PARSE} \
+		-type f \
+		\( -name \*.vcf \
+		-o -name \*.gvcf \
+		-o -name \*.recal \) \
+	>| ${DIR_TO_PARSE}/vcf_to_compress_${TIME_STAMP}.list
 
-		COMPRESS_AND_VALIDATE ()
-			{
-				# GET THE MD5 BEFORE COMPRESSION
+# compress vcf with bgzip and create tbi index
+# compare md5sum before and after compression. if the same, then delete the uncompressed file.
 
-					ORIGINAL_MD5=$(md5sum ${IN_VCF} \
-						| awk '{print $1}')
+	COMPRESS_AND_VALIDATE ()
+	{
+		# GET THE MD5 BEFORE COMPRESSION
 
-				# BGZIP THE FILE AND INDEX IT
+			ORIGINAL_MD5=$(md5sum ${IN_VCF} \
+				| awk '{print $1}')
 
-					# if any part of pipe fails set exit to non-zero
+		# BGZIP THE FILE AND INDEX IT
 
-						set -o pipefail
+			# if any part of pipe fails set exit to non-zero
 
-					${BGZIP_EXEC} \
-						-c \
-						--threads 4 \
-						${IN_VCF} \
-					> ${IN_VCF}.gz \
-						&& \
-					${TABIX_EXEC} \
-						-h ${IN_VCF}.gz
+				set -o pipefail
 
-				# GET THE MD5 AFTER COMPRESSION
+			singularity exec ${DATA_ARCHIVING_CONTAINER} bgzip \
+				--stdout \
+				--threads ${THREADS} \
+				${IN_VCF} \
+			>| ${IN_VCF}.gz \
+				&& \
+			singularity exec ${DATA_ARCHIVING_CONTAINER} tabix \
+				--print-header \
+				${IN_VCF}.gz
 
-					COMPRESSED_MD5=$(md5sum ${IN_VCF}.gz)
+		# GET THE MD5 AFTER COMPRESSION
 
-				# write both md5 to files
+			COMPRESSED_MD5=$(md5sum ${IN_VCF}.gz)
 
-					echo ${COMPRESSED_MD5} >> ${DIR_TO_PARSE}/MD5_REPORTS/compressed_md5_vcf.list
-					echo ${ORIGINAL_MD5} ${IN_VCF} >> ${DIR_TO_PARSE}/MD5_REPORTS/original_md5_vcf.list
+		# write both md5 to files
 
-				# check md5sum of zipped file using zcat
+			echo ${COMPRESSED_MD5} \
+			>> ${DIR_TO_PARSE}/MD5_REPORTS/compressed_md5_vcf.list
+			
+			echo ${ORIGINAL_MD5} ${IN_VCF} \
+			>> ${DIR_TO_PARSE}/MD5_REPORTS/original_md5_vcf.list
 
-					ZIPPED_MD5=$(zcat ${IN_VCF}.gz \
-						| md5sum \
-						| awk '{print $1}')
+		# check md5sum of zipped file using zcat
 
-				# if md5 matches delete the uncompressed file
+			ZIPPED_MD5=$(zcat ${IN_VCF}.gz \
+				| md5sum \
+				| awk '{print $1}')
 
-					if [[ ${ORIGINAL_MD5} = ${ZIPPED_MD5} ]]
-					then
-						echo ${IN_VCF} compressed successfully \
-						>> ${DIR_TO_PARSE}/successful_compression_jobs_vcf.list
+		# if md5 matches delete the uncompressed file
 
-						rm -rvf ${IN_VCF}
-					else
-						echo ${IN_VCF} did not compress successfully \
-						>> ${DIR_TO_PARSE}/failed_compression_jobs_vcf.${TIME_STAMP}.list
-					fi
+			if
+				[[ ${ORIGINAL_MD5} = ${ZIPPED_MD5} ]]
+			then
+				echo ${IN_VCF} compressed successfully \
+				>> ${DIR_TO_PARSE}/successful_compression_jobs_vcf.list
 
-				# delete the tribble index for the uncompressed file
+				rm -rvf ${IN_VCF}
+			else
+				echo ${IN_VCF} did not compress successfully \
+				>> ${DIR_TO_PARSE}/failed_compression_jobs_vcf.${TIME_STAMP}.list
+			fi
 
-					rm -f ${IN_VCF}.idx
-			}
+		# delete the tribble index for the uncompressed file
+
+			rm -f ${IN_VCF}.idx
+	}
 
 	export -f COMPRESS_AND_VALIDATE
 
@@ -105,7 +113,11 @@ START_COMPRESS_VCF=$(date '+%s')
 		COMPRESS_AND_VALIDATE
 	done
 
-END_COMPRESS_VCF=$(date '+%s')
+# capture time process stops for wall clock tracking purposes.
 
-echo ${PROJECT_NAME},COMPRESS_AND_INDEX_VCF,${HOSTNAME},${START_COMPRESS_VCF},${END_COMPRESS_VCF} \
->> ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv
+	END_COMPRESS_VCF=$(date '+%s')
+
+# write out timing metrics to file
+
+	echo ${PROJECT_NAME},COMPRESS_AND_INDEX_VCF,${HOSTNAME},${START_COMPRESS_VCF},${END_COMPRESS_VCF} \
+	>> ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv

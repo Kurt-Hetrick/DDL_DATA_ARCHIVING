@@ -25,30 +25,55 @@
 # INPUT VARIABLES
 
 	IN_BAM=$1
-		SM_TAG=$(basename $IN_BAM .bam)
+		SM_TAG=$(basename ${IN_BAM} .bam)
+		BAM_FILE_NAME=$(basename ${IN_BAM})
 	DIR_TO_PARSE=$2
-	COUNTER=$3
-	JAVA_1_7=$4
-	PICARD_DIR=$5
-	TIME_STAMP=$6
+	DATA_ARCHIVING_CONTAINER=$3
+	COUNTER=$4
+	TIME_STAMP=$5
 
-START_BAM_VALIDATION=`date '+%s'`
+# capture time process starts for wall clock tracking purposes.
 
-	$JAVA_1_7/java -jar $PICARD_DIR/picard.jar \
+	START_BAM_VALIDATION=$(date '+%s')
+
+# run picard ValidateSameFile on bam file
+
+	singularity exec ${DATA_ARCHIVING_CONTAINER} java \
+		-jar \
+	/picard/picard.jar \
 		ValidateSamFile \
-		INPUT= $IN_BAM \
+		INPUT=${IN_BAM} \
 		MODE=SUMMARY \
-	OUTPUT= $DIR_TO_PARSE/BAM_CONVERSION_VALIDATION/$SM_TAG"_bam."$COUNTER".txt"
+	OUTPUT=${DIR_TO_PARSE}/BAM_CONVERSION_VALIDATION/${SM_TAG}_bam.${COUNTER}.txt
 
-	# check the exit signal at this point.
+# check the exit signal at this point.
 
-		SCRIPT_STATUS=`echo $?`
+	SCRIPT_STATUS=$(echo $?)
 
-END_BAM_VALIDATION=`date '+%s'`
+# write out timing metrics to file
 
-echo $IN_BAM,VALIDATE_BAM,$HOSTNAME,$START_BAM_VALIDATION,$END_BAM_VALIDATION \
->> $DIR_TO_PARSE/"COMPRESSOR_WALL_CLOCK_TIMES_"$TIME_STAMP".csv"
+	END_BAM_VALIDATION=$(date '+%s')
+
+# write out timing metrics to file
+
+	echo ${IN_BAM},VALIDATE_BAM,${HOSTNAME},${START_BAM_VALIDATION},${END_BAM_VALIDATION} \
+	>> ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv
 
 # exit with the signal from the program
+# UNLESS the bam file is haplotype caller bam file from the first ddl test panel pipeline
+# if that file is the one being compressed and the exit code = 2 or = 3 then set exit to 0
+# because that is what it is going to be if things go well
 
-	exit $SCRIPT_STATUS
+	if
+		[[ "${BAM_FILE_NAME}" == *".bed.INDEL.bam"* && \
+			"${SCRIPT_STATUS}" -eq 2 ]]
+	then
+		exit 0
+	elif
+		[[ "${BAM_FILE_NAME}" == *".bed.INDEL.bam"* && \
+			"${SCRIPT_STATUS}" -eq 3 ]]
+	then
+		exit 0
+	else	
+		exit ${SCRIPT_STATUS}
+	fi

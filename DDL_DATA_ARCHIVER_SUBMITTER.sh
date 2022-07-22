@@ -4,13 +4,39 @@
 
 	DIR_TO_PARSE=$1 #Directory of the Project to compress. Include the full path
 		PROJECT_NAME=$(basename ${DIR_TO_PARSE})
-	REF_GENOME=$2 # optional. if not present then assumes grch37. full path
+	QUEUE_LIST=$2 # optional. if no 2nd argument present then the default is cgc.q
 
-		DEFAULT_REF_GENOME="/mnt/research/tools/PIPELINE_FILES/bwa_mem_0.7.5a_ref/human_g1k_v37_decoy.fasta"
+		if
+			[[ ! ${QUEUE_LIST} ]]
+		then
+			QUEUE_LIST="cgc.q"
+		fi
 
-			if [[ ! ${REF_GENOME} ]]
+	THREADS=$3 # optional. if no 3rd argument present then default is 6.
+		# if you want to set this then you need to set 2nd argument as well (even to default)
+
+			if
+				[[ ! ${THREADS} ]]
 			then
-				REF_GENOME=${DEFAULT_REF_GENOME}
+				THREADS="6"
+			fi
+
+	PRIORITY=$4 # optional. if no 4th argument present then the default is -15.
+		# if you want to set this then you need to set the 2nd and 3rd argument as well (even to the default)
+
+			if
+				[[ ! ${PRIORITY} ]]
+			then
+				PRIORITY="-1023"
+			fi
+
+	REF_GENOME=$5 # optional. if no 5th argument present then assumes grch37. full path
+		# if you want to set this then you need to set the 2nd, 3rd and 4th an argument as well (even to the default)
+
+			if
+				[[ ! ${REF_GENOME} ]]
+			then
+				REF_GENOME="/mnt/clinical/ddl/NGS/Exome_Resources/PIPELINE_FILES/human_g1k_v37_decoy.fasta"
 			fi
 
 # OTHER VARIABLES
@@ -20,20 +46,6 @@
 		SUBMITTER_SCRIPT_PATH=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 
 		SCRIPT_REPO="${SUBMITTER_SCRIPT_PATH}/COMPRESSION_SCRIPTS"
-
-	# Generate a list of active queue and remove the ones that I don't want to use
-
-		QUEUE_LIST=$(qstat -f -s r \
-			| egrep -v "^[0-9]|^-|^queue|^ " \
-			| cut -d @ -f 1 \
-			| sort \
-			| uniq \
-			| egrep -v "all.q|cgc.q|programmers.q|rhel7.q|bigmem.q|bina.q|qtest.q|bigdata.q|uhoh.q" \
-			| datamash collapse 1 \
-			| awk '{print $1}')
-
-	# SGE priority
-		PRIORITY="-1023"
 
 	# For job organization
 
@@ -50,8 +62,8 @@
 
 	# address to send end of run summary
 
-		WEBHOOK=$(cat ${SUBMITTER_SCRIPT_PATH}/webhook.txt)
-		EMAIL=$(cat ${SUBMITTER_SCRIPT_PATH}/email.txt)
+		WEBHOOK=$(egrep -v "^$|^#|^[[:space:]]" ${SUBMITTER_SCRIPT_PATH}/webhook.txt)
+		EMAIL=$(egrep -v "^$|^#|^[[:space:]]" ${SUBMITTER_SCRIPT_PATH}/email.txt)
 
 	# grab submitter's name
 
@@ -89,16 +101,13 @@
 
 # PIPELINE PROGRAMS
 
-	TABIX_EXEC=/mnt/linuxtools/ANACONDA/anaconda2-5.0.0.1/bin/tabix
-	BGZIP_EXEC=/mnt/linuxtools/ANACONDA/anaconda2-5.0.0.1/bin/bgzip
-	GATK_DIR=/mnt/linuxtools/GATK/GenomeAnalysisTK-3.5-0
-	JAVA_1_7=/mnt/linuxtools/JAVA/jdk1.7.0_25/bin
-	SAMTOOLS_EXEC=/mnt/linuxtools/ANACONDA/anaconda2-5.0.0.1/bin/samtools
-	PICARD_DIR=/mnt/linuxtools/PICARD/picard-tools-1.141
-	DATAMASH_EXE=/mnt/linuxtools/DATAMASH/datamash-1.0.6/datamash
-	PIGZ_MODULE=pigz/2.3.4
-	JAVA_1_8=/mnt/linuxtools/JAVA/jdk1.8.0_73/bin
-	GATK_4_DIR=/mnt/linuxtools/GATK/gatk-4.0.11.0
+	DATA_ARCHIVING_CONTAINER="/mnt/clinical/ddl/NGS/CIDRSeqSuite/containers/data_archiving-0.0.2.simg"
+		# this container has the following software installed
+			# picard 2.26.10 (with openjdk-8)
+			# datamash 1.6
+			# samtools/htslib 1.10 (along with bgzip and tabix)
+			# pigz 2.7
+		# more information can be found in the Dockerfile in Dockerfiles/jhg_ddl/0.0.1
 
 #######################################################################
 ##### SUMMARIZE FILE AND FOLDER SIZES BEFORE THIS COMPRESSION RUN #####
@@ -113,9 +122,9 @@
 			-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/DISK_SIZE_START_${PROJECT_NAME}_${TIME_STAMP}.log \
 		${SCRIPT_REPO}/start_disk_size_summary.sh \
 			${DIR_TO_PARSE} \
+			${DATA_ARCHIVING_CONTAINER} \
 			${ROW_COUNT} \
-			${TIME_STAMP} \
-			${DATAMASH_EXE}
+			${TIME_STAMP}
 	}
 
 	SUMMARIZE_SIZES_START
@@ -124,21 +133,21 @@
 ##### DELETE SUBFOLDERS #####
 #############################
 
-	DELETE_SUBFOLDERS ()
+	DELETE_FASTQ_AND_TEMP ()
 	{
 		echo \
 		qsub \
 			${QSUB_ARGS} \
 			-l h_rt=336:00:00 \
-		-N DELETE_SUBFOLDERS_${PROJECT_NAME} \
-			-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/DELETE_SUBFOLDERS_${PROJECT_NAME}_${TIME_STAMP}.log \
+		-N DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
+			-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/DELETE_FASTQ_TEMP_${PROJECT_NAME}_${TIME_STAMP}.log \
 		-hold_jid SUMMARIZE_START_${PROJECT_NAME} \
-		${SCRIPT_REPO}/delete_subfolders.sh \
+		${SCRIPT_REPO}/delete_fastq_and_temp.sh \
 			${DIR_TO_PARSE} \
 			${TIME_STAMP}
 	}
 
-	DELETE_SUBFOLDERS
+	DELETE_FASTQ_AND_TEMP
 
 ############################################################
 ##### GZIP SELECT OTHER FILES THAT ARE NOT BAM AND VCF #####
@@ -161,10 +170,11 @@
 				-l h_rt=336:00:00 \
 			-N GZIP_${PROJECT_NAME} \
 				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/GZIP_FILE_${PROJECT_NAME}_${TIME_STAMP}.log \
-			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_SUBFOLDERS_${PROJECT_NAME} \
+			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
 			${SCRIPT_REPO}/gzip_file.sh \
 				${DIR_TO_PARSE} \
-				${PIGZ_MODULE} \
+				${DATA_ARCHIVING_CONTAINER} \
+				${THREADS} \
 				${TIME_STAMP}
 		}
 
@@ -184,11 +194,11 @@
 				-l h_rt=336:00:00 \
 			-N COMPRESS_VCF_${PROJECT_NAME} \
 				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/COMPRESS_AND_INDEX_VCF_${PROJECT_NAME}_${TIME_STAMP}.log \
-			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_SUBFOLDERS_${PROJECT_NAME} \
+			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
 			${SCRIPT_REPO}/compress_and_tabix_vcf.sh \
 				${DIR_TO_PARSE} \
-				${TABIX_EXEC} \
-				${BGZIP_EXEC} \
+				${DATA_ARCHIVING_CONTAINER} \
+				${THREADS} \
 				${TIME_STAMP}
 		}
 
@@ -198,46 +208,24 @@
 ##### CONVERT BAM TO CRAM #####
 ###############################
 
-	# Uses samtools-1.4+ to convert bam to cram and index and remove excess tags
+	# Uses samtools-1.10 (or higher) to convert bam to cram losslessly
 
-		BAM_TO_CRAM_CONVERSION_RND ()
+		BAM_TO_CRAM_CONVERSION_LOSSLESS ()
 		{
-			#Remove Tags + 5-bin Quality Score (RND Projects)
-				echo \
-				qsub \
-					${QSUB_ARGS} \
-				-N BAM_TO_CRAM_CONVERSION_${UNIQUE_ID} \
-					-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_TO_CRAM_${BASENAME}_${COUNTER}.log \
-				-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_SUBFOLDERS_${PROJECT_NAME} \
-				${SCRIPT_REPO}/bam_to_cram_remove_tags_rnd.sh \
-					${FILE} \
-					${DIR_TO_PARSE} \
-					${REF_GENOME} \
-					${COUNTER} \
-					${GATK_4_DIR} \
-					${JAVA_1_8} \
-					${SAMTOOLS_EXEC} \
-					${TIME_STAMP}
-		}
-
-	# Uses samtools-1.4 (or higher) to convert bam to cram and index and remove excess tags
-
-		BAM_TO_CRAM_CONVERSION_PRODUCTION ()
-		{
-			#Remove Tags
-				echo \
-				qsub \
-					${QSUB_ARGS} \
-				-N BAM_TO_CRAM_CONVERSION_${UNIQUE_ID} \
-					-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_TO_CRAM_${BASENAME}_${COUNTER}.log \
-				-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_SUBFOLDERS_${PROJECT_NAME} \
-				${SCRIPT_REPO}/bam_to_cram_remove_tags.sh \
-					${FILE} \
-					${DIR_TO_PARSE} \
-					${REF_GENOME} \
-					${SAMTOOLS_EXEC} \
-					${COUNTER} \
-					${TIME_STAMP}
+			echo \
+			qsub \
+				${QSUB_ARGS} \
+			-N BAM_TO_CRAM_CONVERSION_${UNIQUE_ID} \
+				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_TO_CRAM_${BASENAME}_${COUNTER}.log \
+			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
+			${SCRIPT_REPO}/bam_to_cram.sh \
+				${FILE} \
+				${DIR_TO_PARSE} \
+				${DATA_ARCHIVING_CONTAINER} \
+				${REF_GENOME} \
+				${THREADS} \
+				${COUNTER} \
+				${TIME_STAMP}
 		}
 
 	# Uses ValidateSam to report any errors found within the original BAM file
@@ -249,13 +237,12 @@
 				${QSUB_ARGS} \
 			-N BAM_VALIDATOR_${UNIQUE_ID} \
 				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_VALIDATOR_${BASENAME}_${COUNTER}.log \
-			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_SUBFOLDERS_${PROJECT_NAME} \
+			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
 			${SCRIPT_REPO}/bam_validation.sh \
 				${FILE} \
 				${DIR_TO_PARSE} \
+				${DATA_ARCHIVING_CONTAINER} \
 				${COUNTER} \
-				${JAVA_1_7} \
-				${PICARD_DIR} \
 				${TIME_STAMP}
 		}
 
@@ -268,14 +255,13 @@
 				${QSUB_ARGS} \
 			-N CRAM_VALIDATOR_${UNIQUE_ID} \
 				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/CRAM_VALIDATOR_${BASENAME}_${COUNTER}.log \
-			-hold_jid BAM_TO_CRAM_CONVERSION_${UNIQUE_ID},DELETE_SUBFOLDERS_${PROJECT_NAME} \
+			-hold_jid BAM_TO_CRAM_CONVERSION_${UNIQUE_ID},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
 			${SCRIPT_REPO}/cram_validation.sh \
 				${FILE} \
 				${DIR_TO_PARSE} \
+				${DATA_ARCHIVING_CONTAINER} \
 				${REF_GENOME} \
 				${COUNTER} \
-				${JAVA_1_7} \
-				${PICARD_DIR} \
 				${TIME_STAMP}
 		}
 
@@ -292,9 +278,9 @@
 			${SCRIPT_REPO}/bam_cram_validate_compare.sh \
 				${FILE} \
 				${DIR_TO_PARSE} \
+				${DATA_ARCHIVING_CONTAINER} \
+				${THREADS} \
 				${COUNTER} \
-				${DATAMASH_EXE} \
-				${SAMTOOLS_EXEC} \
 				${EMAIL} \
 				${TIME_STAMP}
 		}
@@ -306,23 +292,16 @@
 			MD5_HOLD_LIST="${MD5_HOLD_LIST}VALIDATOR_COMPARE_${UNIQUE_ID},"
 		}
 
-	# Moved to bam_cram_validate_compare.sh and used an if statement to create only once.  Need to test!
-	# echo -e SAMPLE\\tCRAM_CONVERSION_SUCCESS\\tCRAM_ONLY_ERRORS\\tNUMBER_OF_CRAM_ONLY_ERRORS >| ${DIR_TO_PARSE}/cram_conversion_validation.list
-
 	# Pass variable (vcf/txt/cram) file path to function and call $FILE within function
 
 	echo
-	echo "echo ignoring files in ${DIR_TO_PARSE}/HC_CRAM,${DIR_TO_PARSE}/TEMP,${DIR_TO_PARSE}/INDEL,${DIR_TO_PARSE}/MIXED"
-	echo "echo ${DIR_TO_PARSE}/GVCF/AGGREGATE, and ${DIR_TO_PARSE}/MULTI_SAMPLE/VARIANT_SUMMARY_STATS"
-	echo "echo these folders will be deleted, except for TEMP where only the files in the folder are deleted"
+	echo "echo ignoring BAM files in ${DIR_TO_PARSE}/TEMP where the files in the folder are deleted"
 	echo
-
-		# for FILE in $(find ${DIR_TO_PARSE} -type f -name "*.bam" | egrep -v 'HC.bam$|[[:space:]]')
 
 		for FILE in $(find ${DIR_TO_PARSE} \
 						-type f \
 						-name "*.bam" \
-					| egrep -v "/TEMP|/HC_BAM|/HC_CRAM|/INDEL|/MIXED|/SNV|/GVCF/AGGREGATE|/MULTI_SAMPLE/VARIANT_SUMMARY_STATS" )
+					| egrep -v "/TEMP" )
 		do
 			BASENAME=$(basename ${FILE})
 			UNIQUE_ID=$(echo ${BASENAME} \
@@ -330,38 +309,21 @@
 
 			let COUNTER=COUNTER+1 # counter is used for some log or output names if there are multiple copies of a sample file within the directory as to not overwrite outputs
 
-			if [[ ${FILE} == *".bam" ]]; \
+			if
+				[[ ${FILE} == *".bam" ]];
 			then
 				let BAM_COUNTER=BAM_COUNTER+1 # number will match the counter number used for logs and output files like bam/cram validation
-				# case $FILE in *02_CIDR_RND*)
-				case ${FILE} in *[Rr][Nn][Dd]*)
 
 					CRAM_DIR=$(dirname ${FILE} \
 						| awk '{print $0 "/CRAM"}')
 
 					mkdir -p ${CRAM_DIR}
 
-					BAM_TO_CRAM_CONVERSION_RND
+					BAM_TO_CRAM_CONVERSION_LOSSLESS
 					BAM_VALIDATOR
 					CRAM_VALIDATOR
 					VALIDATOR_COMPARER
 					BUILD_CRAM_TO_BAM_HOLD_LIST
-
-				;;
-					*)
-
-					CRAM_DIR=$(dirname ${FILE} \
-						| awk '{print $0 "/CRAM"}')
-
-					mkdir -p ${CRAM_DIR}
-
-					BAM_TO_CRAM_CONVERSION_PRODUCTION
-					BAM_VALIDATOR
-					CRAM_VALIDATOR
-					VALIDATOR_COMPARER
-					BUILD_CRAM_TO_BAM_HOLD_LIST
-				;;
-				esac
 			fi
 		done
 
@@ -379,20 +341,20 @@
 		-hold_jid SUMMARIZE_START_${PROJECT_NAME},GZIP_${PROJECT_NAME},COMPRESS_VCF_${PROJECT_NAME},${MD5_HOLD_LIST} \
 		${SCRIPT_REPO}/finish_disk_size_summary.sh \
 			${DIR_TO_PARSE} \
+			${DATA_ARCHIVING_CONTAINER} \
 			${TIME_STAMP} \
 			${ROW_COUNT} \
 			${WEBHOOK} \
-			${EMAIL} \
-			${DATAMASH_EXE}
+			${EMAIL}
 	}
 
 	SUMMARIZE_SIZES_FINISH
 
 # EMAIL WHEN DONE SUBMITTING
 
-	printf "${PROJECT_NAME}\nhas finished submitting at\n`date`\nby `whoami`" \
-		| mail -s "${PERSON_NAME} has submitted CIDR_DATA_ARCHIVER_SUBMITTER.sh" \
+	printf "${PROJECT_NAME}\nhas finished submitting at\n$(date)\nby $(whoami)" \
+		| mail -s "${PERSON_NAME} has submitted DDL_DATA_ARCHIVER_SUBMITTER.sh" \
 			${EMAIL}
 
 echo
-echo "echo CIDR DATR ARCHIVING PIPELINE FOR ${PROJECT_NAME} HAS FINISHED SUBMITTING AT `date`"
+echo "echo DDL DATR ARCHIVING PIPELINE FOR ${PROJECT_NAME} HAS FINISHED SUBMITTING AT $(date)"
