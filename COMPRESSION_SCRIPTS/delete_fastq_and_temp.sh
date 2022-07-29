@@ -25,6 +25,7 @@
 # INPUT VARIABLES
 
 	DIR_TO_PARSE=$1
+		PROJECT_NAME=$(basename ${DIR_TO_PARSE})
 	TIME_STAMP=$2
 
 # capture time process starts for wall clock tracking purposes.
@@ -34,6 +35,7 @@
 # list all of the files in the TEMP folder
 
 	ls ${DIR_TO_PARSE}/TEMP/* \
+		| egrep -v "_FULL_PATH.txt" \
 	>| ${DIR_TO_PARSE}/FILES_FOR_DELETION_${TIME_STAMP}.list
 
 # find all of the fastq files
@@ -75,13 +77,17 @@
 
 # set IFS back to original IFS
 
-		IFS="${saveIFS}"
+	IFS="${saveIFS}"
 
 # capture time process stops for wall clock tracking purposes.
 
 	END_DELETE_FASTQ_AND_TEMP=$(date '+%s')
 
+# calculate wall clock minutes
+
+	WALL_CLOCK_MINUTES=$(printf "%.2f" "$(echo "(${END_DELETE_FASTQ_AND_TEMP} - ${START_DELETE_FASTQ_AND_TEMP}) / 60" | bc -l)")
+
 # write out timing metrics to file
 
-	echo ${CRAM_DIR}/${SM_TAG}.cram,VALIDATE_CRAM,${HOSTNAME},${START_DELETE_FASTQ_AND_TEMP},${END_DELETE_FASTQ_AND_TEMP} \
+	echo ${PROJECT_NAME},DELETE_FASTQ_AND_TEMP,${HOSTNAME},${START_DELETE_FASTQ_AND_TEMP},${END_DELETE_FASTQ_AND_TEMP},${WALL_CLOCK_MINUTES} \
 	>> ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv

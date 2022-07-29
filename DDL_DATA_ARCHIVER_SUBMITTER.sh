@@ -39,6 +39,16 @@
 				REF_GENOME="/mnt/clinical/ddl/NGS/Exome_Resources/PIPELINE_FILES/human_g1k_v37_decoy.fasta"
 			fi
 
+# BELOW IS JUST AN EXAMPLE OF CHECKING INPUT ARGUMENTS IN CASE I DECIDE TO DO AN ARGUMENT CHECK
+
+# #Prompt for username
+# 	read -p "Enter the User JHED ID: " username
+
+# 		if [ ${#username} -eq 0 ]; then
+# 		    echo "Illegal number of parameters. Please enter JHED ID for user name.";
+# 			exit 0
+# 		fi
+
 # OTHER VARIABLES
 
 	# CHANGE SCRIPT DIR TO WHERE YOU HAVE HAVE THE SCRIPTS BEING SUBMITTED
@@ -107,7 +117,7 @@
 			# datamash 1.6
 			# samtools/htslib 1.10 (along with bgzip and tabix)
 			# pigz 2.7
-		# more information can be found in the Dockerfile in Dockerfiles/jhg_ddl/0.0.1
+		# more information can be found in the Dockerfile in Dockerfiles/jhg_ddl/0.0.2
 
 #######################################################################
 ##### SUMMARIZE FILE AND FOLDER SIZES BEFORE THIS COMPRESSION RUN #####
@@ -127,8 +137,6 @@
 			${TIME_STAMP}
 	}
 
-	SUMMARIZE_SIZES_START
-
 #############################
 ##### DELETE SUBFOLDERS #####
 #############################
@@ -146,8 +154,6 @@
 			${DIR_TO_PARSE} \
 			${TIME_STAMP}
 	}
-
-	DELETE_FASTQ_AND_TEMP
 
 ############################################################
 ##### GZIP SELECT OTHER FILES THAT ARE NOT BAM AND VCF #####
@@ -178,8 +184,6 @@
 				${TIME_STAMP}
 		}
 
-		ZIP_TEXT_AND_CSV_FILE
-
 ##############################
 ##### COMPRESS VCF FILES #####
 ##############################
@@ -202,7 +206,14 @@
 				${TIME_STAMP}
 		}
 
+		SUMMARIZE_SIZES_START
+		echo sleep 0.1s
+		DELETE_FASTQ_AND_TEMP
+		echo sleep 0.1s
+		ZIP_TEXT_AND_CSV_FILE
+		echo sleep 0.1s
 		COMPRESS_AND_INDEX_VCF
+		echo sleep 0.1s
 
 ###############################
 ##### CONVERT BAM TO CRAM #####
@@ -215,16 +226,16 @@
 			echo \
 			qsub \
 				${QSUB_ARGS} \
-			-N BAM_TO_CRAM_CONVERSION_${UNIQUE_ID} \
-				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_TO_CRAM_${BASENAME}_${COUNTER}.log \
+			-N BAM_TO_CRAM_CONVERSION_${UNIQUE_ID}_${BAM_COUNTER} \
+				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_TO_CRAM_${BASENAME}_${BAM_COUNTER}.log \
 			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
 			${SCRIPT_REPO}/bam_to_cram.sh \
-				${FILE} \
+				${DIR_TO_PARSE}/TEMP/${BASENAME}_-_${BAM_COUNTER}_FULL_PATH.txt \
 				${DIR_TO_PARSE} \
 				${DATA_ARCHIVING_CONTAINER} \
 				${REF_GENOME} \
 				${THREADS} \
-				${COUNTER} \
+				${BAM_COUNTER} \
 				${TIME_STAMP}
 		}
 
@@ -235,14 +246,14 @@
 			echo \
 			qsub \
 				${QSUB_ARGS} \
-			-N BAM_VALIDATOR_${UNIQUE_ID} \
-				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_VALIDATOR_${BASENAME}_${COUNTER}.log \
+			-N BAM_VALIDATOR_${UNIQUE_ID}_${BAM_COUNTER} \
+				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_VALIDATOR_${BASENAME}_${BAM_COUNTER}.log \
 			-hold_jid SUMMARIZE_START_${PROJECT_NAME},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
 			${SCRIPT_REPO}/bam_validation.sh \
-				${FILE} \
+				${DIR_TO_PARSE}/TEMP/${BASENAME}_-_${BAM_COUNTER}_FULL_PATH.txt \
 				${DIR_TO_PARSE} \
 				${DATA_ARCHIVING_CONTAINER} \
-				${COUNTER} \
+				${BAM_COUNTER} \
 				${TIME_STAMP}
 		}
 
@@ -253,15 +264,15 @@
 			echo \
 			qsub \
 				${QSUB_ARGS} \
-			-N CRAM_VALIDATOR_${UNIQUE_ID} \
-				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/CRAM_VALIDATOR_${BASENAME}_${COUNTER}.log \
-			-hold_jid BAM_TO_CRAM_CONVERSION_${UNIQUE_ID},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
+			-N CRAM_VALIDATOR_${UNIQUE_ID}_${BAM_COUNTER} \
+				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/CRAM_VALIDATOR_${BASENAME}_${BAM_COUNTER}.log \
+			-hold_jid BAM_TO_CRAM_CONVERSION_${UNIQUE_ID}_${BAM_COUNTER},DELETE_FASTQ_AND_TEMP_${PROJECT_NAME} \
 			${SCRIPT_REPO}/cram_validation.sh \
-				${FILE} \
+				${DIR_TO_PARSE}/TEMP/${BASENAME}_-_${BAM_COUNTER}_FULL_PATH.txt \
 				${DIR_TO_PARSE} \
 				${DATA_ARCHIVING_CONTAINER} \
 				${REF_GENOME} \
-				${COUNTER} \
+				${BAM_COUNTER} \
 				${TIME_STAMP}
 		}
 
@@ -272,15 +283,15 @@
 			echo \
 			qsub \
 				${QSUB_ARGS} \
-			-N VALIDATOR_COMPARE_${UNIQUE_ID} \
-				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_CRAM_VALIDATE_COMPARE_${COUNTER}.log \
-			-hold_jid BAM_VALIDATOR_${UNIQUE_ID},CRAM_VALIDATOR_${UNIQUE_ID} \
+			-N VALIDATOR_COMPARE_${UNIQUE_ID}_${BAM_COUNTER} \
+				-o ${DIR_TO_PARSE}/LOGS/COMPRESSION/BAM_CRAM_VALIDATE_COMPARE_${BASENAME}_${COUNTER}.log \
+			-hold_jid BAM_VALIDATOR_${UNIQUE_ID}_${BAM_COUNTER},CRAM_VALIDATOR_${UNIQUE_ID}_${BAM_COUNTER} \
 			${SCRIPT_REPO}/bam_cram_validate_compare.sh \
-				${FILE} \
+				${DIR_TO_PARSE}/TEMP/${BASENAME}_-_${BAM_COUNTER}_FULL_PATH.txt \
 				${DIR_TO_PARSE} \
 				${DATA_ARCHIVING_CONTAINER} \
 				${THREADS} \
-				${COUNTER} \
+				${BAM_COUNTER} \
 				${EMAIL} \
 				${TIME_STAMP}
 		}
@@ -289,43 +300,83 @@
 
 		BUILD_CRAM_TO_BAM_HOLD_LIST ()
 		{
-			MD5_HOLD_LIST="${MD5_HOLD_LIST}VALIDATOR_COMPARE_${UNIQUE_ID},"
+			MD5_HOLD_LIST="${MD5_HOLD_LIST}VALIDATOR_COMPARE_${UNIQUE_ID}_${BAM_COUNTER},"
 		}
 
-	# Pass variable (vcf/txt/cram) file path to function and call $FILE within function
+	# # set original IFS to variable.
 
-	echo
-	echo "echo ignoring BAM files in ${DIR_TO_PARSE}/TEMP where the files in the folder are deleted"
-	echo
+	# 	saveIFS="${IFS}"
 
-		for FILE in $(find ${DIR_TO_PARSE} \
-						-type f \
-						-name "*.bam" \
-					| egrep -v "/TEMP" )
+	# # set IFS to semi colon and newline to handle files with whitespace in name
+	# # not using comma here b/c email can be comma delimited
+
+	# 	IFS=$',\n'
+
+	# Search for bam files in Project directory
+	# For each bam file found, write its full path to a file in TEMP
+	# this file is the input into bam to cram and it's validation
+
+		echo "echo"
+		echo "echo searching project folder for BAM files"
+		echo "echo ignoring BAM files in ${DIR_TO_PARSE}/TEMP where the files in the folder are deleted"
+		echo "echo"
+
+		for FILE in \
+			$(find ${DIR_TO_PARSE} \
+					-type f \
+					-name "*.bam" \
+				| egrep -v "/TEMP" )
 		do
-			BASENAME=$(basename ${FILE})
-			UNIQUE_ID=$(echo ${BASENAME} \
-				| sed 's/@/_/g') # If there is an @ in the qsub or holdId name it breaks
+			# set original IFS to variable.
 
-			let COUNTER=COUNTER+1 # counter is used for some log or output names if there are multiple copies of a sample file within the directory as to not overwrite outputs
+				saveIFS="${IFS}"
 
-			if
-				[[ ${FILE} == *".bam" ]];
-			then
-				let BAM_COUNTER=BAM_COUNTER+1 # number will match the counter number used for logs and output files like bam/cram validation
+			# set IFS to comma and newline to handle files with whitespace in name
 
-					CRAM_DIR=$(dirname ${FILE} \
-						| awk '{print $0 "/CRAM"}')
+				IFS=$',\n'
 
-					mkdir -p ${CRAM_DIR}
+			# set some variables
 
-					BAM_TO_CRAM_CONVERSION_LOSSLESS
-					BAM_VALIDATOR
-					CRAM_VALIDATOR
-					VALIDATOR_COMPARER
-					BUILD_CRAM_TO_BAM_HOLD_LIST
-			fi
+				BASENAME=$(basename "${FILE}")
+				UNIQUE_ID=$(echo ${BASENAME} \
+					| sed 's/@/_/g') # If there is an @ in the qsub or holdId name it breaks
+
+			# counter is used for some log or output names if there are multiple copies of a sample file within the directory as to not overwrite outputs
+
+				let BAM_COUNTER=BAM_COUNTER+1
+
+			# write the file path to a temp file
+
+				echo $FILE >| ${DIR_TO_PARSE}/TEMP/${BASENAME}_-_${BAM_COUNTER}_FULL_PATH.txt
+
+			# make a directory to write the cram file too
+
+				CRAM_DIR=$(dirname "${FILE}" \
+					| awk '{print $0 "/CRAM"}')
+
+				mkdir -p "${CRAM_DIR}"
+
+			# set IFS back to original IFS
+
+				IFS="${saveIFS}"
+
+			# for the steps for each bam file found
+
+				BAM_TO_CRAM_CONVERSION_LOSSLESS
+				echo sleep 0.1s
+				BAM_VALIDATOR
+				echo sleep 0.1s
+				CRAM_VALIDATOR
+				echo sleep 0.1s
+				VALIDATOR_COMPARER
+				echo sleep 0.1s
+				BUILD_CRAM_TO_BAM_HOLD_LIST
+				echo sleep 0.1s
 		done
+
+	# set IFS back to original IFS
+
+		# IFS="${saveIFS}"
 
 #######################################################################
 ##### SUMMARIZE FILE AND FOLDER SIZES BEFORE THIS COMPRESSION RUN #####
@@ -356,5 +407,5 @@
 		| mail -s "${PERSON_NAME} has submitted DDL_DATA_ARCHIVER_SUBMITTER.sh" \
 			${EMAIL}
 
-echo
+echo "echo"
 echo "echo DDL DATR ARCHIVING PIPELINE FOR ${PROJECT_NAME} HAS FINISHED SUBMITTING AT $(date)"

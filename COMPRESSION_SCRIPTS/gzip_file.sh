@@ -37,7 +37,7 @@
 ### LOOKING FOR THE FOLLOWING FILES TO COMPRESS:
 ### txt,csv,tsv,intervals,fasta,idat,ped,fastq,bed,lgen,sam,xml,log,sample_interval_summary,genome,tped,tif,bak,ibs0,bim,snp
 ### jpg,kin0,analysis,gtc,sas7bdata,locs,gdepth,lgenf,mpileup,backup,psl,daf,fq,out,CEL,frq,map,variant_function,lmiss
-	### ignoring ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv
+	### ignoring ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv and othe files
 
 	find ${DIR_TO_PARSE} -type f \
 		\( -iname \*.txt \
@@ -80,7 +80,7 @@
 		-o -name \*.lmiss \
 		-o -name \*.snp \
 		-o -name \*.backup \) \
-	| egrep -v "COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv|/LOGS/COMPRESSION/|CONVERSION_VALIDATION/" \
+	| egrep -v "COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv|/LOGS/COMPRESSION/|CONVERSION_VALIDATION/|cram_compression_times|_FULL_PATH.txt" \
 	>| ${DIR_TO_PARSE}/other_files_to_compress_${TIME_STAMP}.list
 
 # compare md5sum before and after compression. if the same, then delete the uncompressed file.
@@ -150,7 +150,8 @@
 
 	# loop through all the files
 
-		for FILE in $(cat ${DIR_TO_PARSE}/other_files_to_compress_${TIME_STAMP}.list);
+		for FILE in \
+			$(cat ${DIR_TO_PARSE}/other_files_to_compress_${TIME_STAMP}.list)
 		do
 			COMPRESS_AND_VALIDATE
 		done
@@ -163,7 +164,11 @@
 
 	END_GZIP=$(date '+%s')
 
+# calculate wall clock minutes
+
+	WALL_CLOCK_MINUTES=$(printf "%.2f" "$(echo "(${END_GZIP} - ${START_GZIP}) / 60" | bc -l)")
+
 # write out timing metrics to file
 
-	echo ${PROJECT_NAME},PIGZ,${HOSTNAME},${START_GZIP},${END_GZIP} \
+	echo ${PROJECT_NAME},PIGZ,${HOSTNAME},${START_GZIP},${END_GZIP},${WALL_CLOCK_MINUTES} \
 	>> ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv

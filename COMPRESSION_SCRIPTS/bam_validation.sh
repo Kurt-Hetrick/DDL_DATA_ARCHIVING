@@ -24,17 +24,29 @@
 
 # INPUT VARIABLES
 
-	IN_BAM=$1
-		SM_TAG=$(basename ${IN_BAM} .bam)
-		BAM_FILE_NAME=$(basename ${IN_BAM})
+	BAM_FULL_PATH_FILE=$1
 	DIR_TO_PARSE=$2
 	DATA_ARCHIVING_CONTAINER=$3
-	COUNTER=$4
+	BAM_COUNTER=$4
 	TIME_STAMP=$5
 
 # capture time process starts for wall clock tracking purposes.
 
 	START_BAM_VALIDATION=$(date '+%s')
+
+# set original IFS to variable.
+
+	saveIFS="${IFS}"
+
+# set IFS to comma and newline to handle files with whitespace in name
+
+	IFS=$',\n'
+
+# parse bam path file to create new variables. double quote to handle whitespace in path if present
+
+	IN_BAM=$(cat "${BAM_FULL_PATH_FILE}")
+		SM_TAG=$(basename "${IN_BAM}" .bam)
+		BAM_FILE_NAME=$(basename "${IN_BAM}")
 
 # run picard ValidateSameFile on bam file
 
@@ -42,21 +54,29 @@
 		-jar \
 	/picard/picard.jar \
 		ValidateSamFile \
-		INPUT=${IN_BAM} \
+		INPUT="${IN_BAM}" \
 		MODE=SUMMARY \
-	OUTPUT=${DIR_TO_PARSE}/BAM_CONVERSION_VALIDATION/${SM_TAG}_bam.${COUNTER}.txt
+	OUTPUT=${DIR_TO_PARSE}/BAM_CONVERSION_VALIDATION/${SM_TAG}_bam.${BAM_COUNTER}.txt
 
 # check the exit signal at this point.
 
 	SCRIPT_STATUS=$(echo $?)
 
+# set IFS back to original IFS
+
+	IFS="${saveIFS}"
+
 # write out timing metrics to file
 
 	END_BAM_VALIDATION=$(date '+%s')
 
+# calculate wall clock minutes
+
+	WALL_CLOCK_MINUTES=$(printf "%.2f" "$(echo "(${END_BAM_VALIDATION} - ${START_BAM_VALIDATION}) / 60" | bc -l)")
+
 # write out timing metrics to file
 
-	echo ${IN_BAM},VALIDATE_BAM,${HOSTNAME},${START_BAM_VALIDATION},${END_BAM_VALIDATION} \
+	echo "${IN_BAM}",VALIDATE_BAM,${HOSTNAME},${START_BAM_VALIDATION},${END_BAM_VALIDATION},${WALL_CLOCK_MINUTES} \
 	>> ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv
 
 # exit with the signal from the program

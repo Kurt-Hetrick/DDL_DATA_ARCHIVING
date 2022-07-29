@@ -108,7 +108,18 @@
 
 	export -f COMPRESS_AND_VALIDATE
 
-	for IN_VCF in $(cat ${DIR_TO_PARSE}/vcf_to_compress_${TIME_STAMP}.list);
+# set original IFS to variable.
+
+	saveIFS="${IFS}"
+
+# set IFS to comma and newline to handle files with whitespace in name
+
+	IFS=$',\n'
+
+# loop through all the files
+
+	for IN_VCF in \
+		$(cat ${DIR_TO_PARSE}/vcf_to_compress_${TIME_STAMP}.list)
 	do
 		COMPRESS_AND_VALIDATE
 	done
@@ -117,7 +128,11 @@
 
 	END_COMPRESS_VCF=$(date '+%s')
 
+# calculate wall clock minutes
+
+	WALL_CLOCK_MINUTES=$(printf "%.2f" "$(echo "(${END_COMPRESS_VCF} - ${START_COMPRESS_VCF}) / 60" | bc -l)")
+
 # write out timing metrics to file
 
-	echo ${PROJECT_NAME},COMPRESS_AND_INDEX_VCF,${HOSTNAME},${START_COMPRESS_VCF},${END_COMPRESS_VCF} \
+	echo ${PROJECT_NAME},COMPRESS_AND_INDEX_VCF,${HOSTNAME},${START_COMPRESS_VCF},${END_COMPRESS_VCF},${WALL_CLOCK_MINUTES} \
 	>> ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv

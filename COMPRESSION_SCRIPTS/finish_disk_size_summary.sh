@@ -41,7 +41,7 @@
 	START_DATE=$(grep "^start;" ${PROJECT_START_SUMMARY_FILE} \
 		| awk 'BEGIN {FS="\t"} {print $2}')
 
-	TOTAL_START_GB=$(grep "before_compress_Gb;" ${PROJECT_START_SUMMARY_FILE} \
+	TOTAL_START_GB=$(grep "before_triage_Gb;" ${PROJECT_START_SUMMARY_FILE} \
 		| awk 'BEGIN {FS="\t"} {print $2}')
 
 	EXT_BEFORE_COMPRESSION_SUMMARY=$(grep "ext_b4_compress;" ${PROJECT_START_SUMMARY_FILE} \
@@ -66,10 +66,10 @@
 		\"@type\": \"MessageCard\",\n \
 		\"@context\": \"http://schema.org/extensions\",\n \
 		\"themeColor\": \"0078D7\",\n \
-		\"summary\": \"Before and after project compression summary\", \n \
+		\"summary\": \"Before and after project triage summary\", \n \
 		\"sections\": [\n\
 		{ \n\
-			\"activityTitle\": \"Before and After Compression Summary\",\n\
+			\"activityTitle\": \"Before and After Triage Summary\",\n\
 				\"facts\": [\n\
 		" \
 	>| ${DIR_TO_PARSE}/${PROJECT_NAME}_${TIME_STAMP}_DATA_ARCHIVING_SUMMARY.json
@@ -112,11 +112,11 @@
 				\"value\": \"${FINISHED_DATE}\"\n \
 			}, \n \
 			{\n \
-				\"name\": \"BEFORE COMPRESSION\",\n \
+				\"name\": \"BEFORE TRIAGE\",\n \
 				\"value\": \"${TOTAL_START_GB} Gb\"\n \
 			},\n \
 			{\n \
-				\"name\": \"AFTER COMPRESSION\",\n \
+				\"name\": \"AFTER TRIAGE\",\n \
 				\"value\": \"${TOTAL_END_GB} Gb\"\n \
 			},\n \
 			{\n \
@@ -255,7 +255,7 @@
 
 	printf \
 		"{\n \
-		\"activityTitle\": \"Top ${ROW_COUNT} first level subfolders by disk space used before compression:\",\n\
+		\"activityTitle\": \"Top ${ROW_COUNT} first level subfolders by disk space used before triage:\",\n\
 			\"facts\": [\n\
 		" \
 	>> ${DIR_TO_PARSE}/${PROJECT_NAME}_${TIME_STAMP}_DATA_ARCHIVING_SUMMARY.json
@@ -276,7 +276,7 @@
 
 	printf \
 		"{\n \
-		\"activityTitle\": \"Top ${ROW_COUNT} first level subfolders by disk space used after compression:\",\n\
+		\"activityTitle\": \"Top ${ROW_COUNT} first level subfolders by disk space used after triage:\",\n\
 			\"facts\": [\n\
 		" \
 	>> ${DIR_TO_PARSE}/${PROJECT_NAME}_${TIME_STAMP}_DATA_ARCHIVING_SUMMARY.json
@@ -344,7 +344,11 @@
 
 	END_FINISHING_SUMMARY=$(date '+%s')
 
+# calculate wall clock minutes
+
+	WALL_CLOCK_MINUTES=$(printf "%.2f" "$(echo "(${END_FINISHING_SUMMARY} - ${START_FINISHING_SUMMARY}) / 60" | bc -l)")
+
 # write out timing metrics to file
 
-	echo ${PROJECT_NAME},FINISH_SUMMARY,${HOSTNAME},${START_FINISHING_SUMMARY},${END_FINISHING_SUMMARY} \
+	echo ${PROJECT_NAME},FINISH_SUMMARY,${HOSTNAME},${START_FINISHING_SUMMARY},${END_FINISHING_SUMMARY},${WALL_CLOCK_MINUTES} \
 	>> ${DIR_TO_PARSE}/COMPRESSOR_WALL_CLOCK_TIMES_${TIME_STAMP}.csv
