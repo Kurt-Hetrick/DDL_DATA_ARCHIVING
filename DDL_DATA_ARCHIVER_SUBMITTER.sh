@@ -303,14 +303,14 @@
 			MD5_HOLD_LIST="${MD5_HOLD_LIST}VALIDATOR_COMPARE_${UNIQUE_ID}_${BAM_COUNTER},"
 		}
 
-	# # set original IFS to variable.
+	# set original IFS to variable.
 
-	# 	saveIFS="${IFS}"
+		saveIFS="${IFS}"
 
-	# # set IFS to semi colon and newline to handle files with whitespace in name
-	# # not using comma here b/c email can be comma delimited
+	# set IFS to semi colon and newline to handle files with whitespace in name
+	# not using comma here b/c email can be comma delimited
 
-	# 	IFS=$',\n'
+		IFS=$';\n'
 
 	# Search for bam files in Project directory
 	# For each bam file found, write its full path to a file in TEMP
@@ -327,14 +327,6 @@
 					-name "*.bam" \
 				| egrep -v "/TEMP" )
 		do
-			# set original IFS to variable.
-
-				saveIFS="${IFS}"
-
-			# set IFS to comma and newline to handle files with whitespace in name
-
-				IFS=$',\n'
-
 			# set some variables
 
 				BASENAME=$(basename "${FILE}")
@@ -347,7 +339,8 @@
 
 			# write the file path to a temp file
 
-				echo $FILE >| ${DIR_TO_PARSE}/TEMP/${BASENAME}_-_${BAM_COUNTER}_FULL_PATH.txt
+				echo "$FILE" \
+				>| ${DIR_TO_PARSE}/TEMP/${BASENAME}_-_${BAM_COUNTER}_FULL_PATH.txt
 
 			# make a directory to write the cram file too
 
@@ -355,10 +348,6 @@
 					| awk '{print $0 "/CRAM"}')
 
 				mkdir -p "${CRAM_DIR}"
-
-			# set IFS back to original IFS
-
-				IFS="${saveIFS}"
 
 			# for the steps for each bam file found
 
@@ -371,12 +360,11 @@
 				VALIDATOR_COMPARER
 				echo sleep 0.1s
 				BUILD_CRAM_TO_BAM_HOLD_LIST
-				echo sleep 0.1s
 		done
 
 	# set IFS back to original IFS
 
-		# IFS="${saveIFS}"
+		IFS="${saveIFS}"
 
 #######################################################################
 ##### SUMMARIZE FILE AND FOLDER SIZES BEFORE THIS COMPRESSION RUN #####
