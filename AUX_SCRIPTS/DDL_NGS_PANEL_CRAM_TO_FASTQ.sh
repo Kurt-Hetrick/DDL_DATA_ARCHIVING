@@ -29,18 +29,8 @@
 	SM_TAG=$3 # SAMPLE NAME
 	SAMPLE_NUMBER=$4 # CORRESPONDS WHAT EVER NUMBER THE ILLUMINA MANIFEST ASSIGNED TO THE SAMPLE
 	OUTPUT_DIRECTORY=$5 # Output Directory for Fastq Files (FULL PATH TO OUTPUT PROJECT DIRECTORY, FASTQ SHOULD NOT BE IN THE NAME/FINAL DIRECTORY)
-	# OPTIONAL 5TH ARGUMENT THAT SHOULD NOT BE NEEDED FOR BAM FILE FROM THE NGS PIPELINE
-	# Reference genome in fasta format used for creating BAM file.
-	# Needs to be indexed with samtools faidx (would have ref.fasta.fai companion file)
 	EMAIL=$6
 	REF_GENOME=$7
-
-		DEFAULT_REF_GENOME=/mnt/research/tools/PIPELINE_FILES/bwa_mem_0.7.5a_ref/human_g1k_v37_decoy.fasta
-
-		if [[ ! ${REF_GENOME} ]]
-			then
-			REF_GENOME=${DEFAULT_REF_GENOME}
-		fi
 
 # find the cram file in the input directory
 
@@ -94,8 +84,8 @@
 		[ "${SCRIPT_STATUS}" -ne 0 ]
 	then
 		printf "Please see:\n${OUTPUT_DIRECTORY}/LOGS/CRAM_TO_FASTQ_${SM_TAG}.log\nfor details" \
-		| mail -s "${SM_TAG} FROM ${INPUT_DIRECTORY} FAILED CRAM TO FASTQ CONVERSION" \
-			${EMAIL} \
+			| mail -s "${SM_TAG} FROM ${INPUT_DIRECTORY} FAILED CRAM TO FASTQ CONVERSION" \
+				${EMAIL} \
 		| bash
 	fi
 
