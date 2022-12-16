@@ -96,7 +96,7 @@
 
 	CREATE_SAMPLE_ARRAY ()
 	{
-		SAMPLE_ARRAY=(`zcat ${SAMPLE_SHEET} \
+		SAMPLE_ARRAY=(`zless ${SAMPLE_SHEET} \
 			| awk 1 \
 			| sed 's/\r//g; /^$/d; /^[[:space:]]*$/d' \
 			| awk 'BEGIN {FS=","} $8=="'${SM_TAG}'" {print $3,$8}' \
