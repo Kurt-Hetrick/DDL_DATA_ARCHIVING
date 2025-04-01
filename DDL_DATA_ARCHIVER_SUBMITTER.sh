@@ -111,7 +111,7 @@
 
 # PIPELINE PROGRAMS
 
-	DATA_ARCHIVING_CONTAINER="/mnt/clinical/ddl/NGS/CIDRSeqSuite/containers/data_archiving-0.0.2.simg"
+	DATA_ARCHIVING_CONTAINER="/mnt/clinical/ddl/NGS/DDL_DATA_ARCHIVING/data_archiving-0.0.2.simg"
 		# this container has the following software installed
 			# picard 2.26.10 (with openjdk-8)
 			# datamash 1.6
